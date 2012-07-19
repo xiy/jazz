@@ -29,33 +29,28 @@ module Jazz
     #
     # Returns a nested Array of tokens that include the token type, name, and
     # any comments associated with it OR nil if parsing failed or was ivalid.
-
-    # ['file1', 'file2'] or ['file1'] or [File]
     def parse(*source)
-      src = []
-      if source.respond_to? :each # is_a? Array
-        source.each do |file|
-          src << File.read(file)
-        end
-      elsif source.respond_to? :read # is_a? File
-        src << source.read
-      elsif source.respond_to? :to_s # is_a? String
-        src << File.read(source.to_s)
-      end
-
-      src.each do |file|
+      source.each do |file|
         sexp = to_sexp(file)
-        sexp.each_of_type(:defn) { |t| puts "#{t}\n\n" }
-        tokens = to_h(sexp)
-        # yield tokens if block_given?
+        methods = parse_methods
       end
-
-      # @tokenised_files = { :files => source, :tokens => tokens }
-
-      # Return the @tokenised_files if there is any, otherwise return nil.
-      # @tokenised_files.length > 0 ? @tokenised_files : nil
     end
 
+    def source=(source)
+      if source.respond_to? :each # is_a? Array
+        source.each do |file|
+          @source << to_sexp(File.read(file))
+        end
+      elsif source.respond_to? :read # is_a? File
+        @source = to_sexp(source.read)
+      elsif source.respond_to? :to_s # is_a? String
+        @source = to_sexp(File.read(source.to_s))
+      end
+    end
+
+    # Uses RubyParser to convert a Ruby source file into an S-expression.
+    #
+    # Returns an S-expression that represents the Ruby source file.
     def to_sexp(source)
       @ruby_parser.parse(source)
     end
@@ -63,25 +58,24 @@ module Jazz
     def parse_methods
       unless @source.nil?
         instance_methods, class_methods = [], []
-        src = to_sexp(File.read(@source)).compact
 
-        src.each_of_type(:defn) do |method|
-          # p method
+        @source.each_of_type(:defn) do |method|
+          #p method
           m = { :type => :instance_method, :name => method[1], :comments => method.comments,
             :args => get_method_args(method.find_node(:args)) }
           yield m if block_given?
           instance_methods << m
         end
 
-        src.each_of_type(:defs) do |method|
+        @source.each_of_type(:defs) do |method|
           # p method
-          m = { :type => :class_method, :name => method[1], :comments => method.comments,
+          m = { :type => :class_method, :name => method[2], :comments => method.comments,
             :args => get_method_args(method.find_node(:args)) }
           yield m if block_given?
           class_methods << m
         end
 
-        result = [instance_methods, class_methods]
+         class_methods + instance_methods
       end
     end
 
@@ -108,7 +102,7 @@ module Jazz
       # we also need to check if any args actually have defaults, and if so, retrieve them
       unless method_args.find_node(:block).nil?
         defaults = method_args.each_of_type(:lasgn) do |node|
-          default = node.sexp_body.flatten
+          default = node.sexp_body.flatten.reject { |e| [:block, :lasgn, :call, :lit].include? e }
           default_name, default_value = default[0], default[1]
           final_args[default_name] = default_value if args.include? default_name
         end
