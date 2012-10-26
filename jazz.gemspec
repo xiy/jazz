@@ -21,6 +21,7 @@ Gem::Specification.new do |gem|
   gem.add_dependency('rgl')
   gem.add_dependency('ruby_parser')
   gem.add_dependency('colorize')
+  gem.add_dependency('parallel')
 
   gem.add_development_dependency('rspec')
   gem.add_development_dependency('spork')
